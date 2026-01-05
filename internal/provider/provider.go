@@ -1,59 +1,68 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package provider
 
 import (
 	"context"
-	"net/http"
+	"os"
 
-	"github.com/hashicorp/terraform-plugin-framework/action"
+	"github.com/clouddicted/terraform-provider-ceph/internal/client"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
-	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
-	"github.com/hashicorp/terraform-plugin-framework/function"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// Ensure ScaffoldingProvider satisfies various provider interfaces.
-var _ provider.Provider = &ScaffoldingProvider{}
-var _ provider.ProviderWithFunctions = &ScaffoldingProvider{}
-var _ provider.ProviderWithEphemeralResources = &ScaffoldingProvider{}
-var _ provider.ProviderWithActions = &ScaffoldingProvider{}
+// Ensure CephProvider satisfies various provider interfaces.
+var _ provider.Provider = &CephProvider{}
 
-// ScaffoldingProvider defines the provider implementation.
-type ScaffoldingProvider struct {
+// CephProvider defines the provider implementation.
+type CephProvider struct {
 	// version is set to the provider version on release, "dev" when the
 	// provider is built and ran locally, and "test" when running acceptance
 	// testing.
 	version string
 }
 
-// ScaffoldingProviderModel describes the provider data model.
-type ScaffoldingProviderModel struct {
-	Endpoint types.String `tfsdk:"endpoint"`
+// CephProviderModel describes the provider data model.
+type CephProviderModel struct {
+	URL      types.String `tfsdk:"url"`
+	Username types.String `tfsdk:"username"`
+	Password types.String `tfsdk:"password"`
+	Insecure types.Bool   `tfsdk:"insecure"`
 }
 
-func (p *ScaffoldingProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
-	resp.TypeName = "scaffolding"
+func (p *CephProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
+	resp.TypeName = "ceph"
 	resp.Version = p.version
 }
 
-func (p *ScaffoldingProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+func (p *CephProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
-			"endpoint": schema.StringAttribute{
-				MarkdownDescription: "Example provider attribute",
+			"url": schema.StringAttribute{
+				MarkdownDescription: "The Ceph Dashboard URL (e.g., https://ceph-dashboard.example.com:8443)",
+				Optional:            true,
+			},
+			"username": schema.StringAttribute{
+				MarkdownDescription: "The username for authentication",
+				Optional:            true,
+				Sensitive:           true,
+			},
+			"password": schema.StringAttribute{
+				MarkdownDescription: "The password for authentication",
+				Optional:            true,
+				Sensitive:           true,
+			},
+			"insecure": schema.BoolAttribute{
+				MarkdownDescription: "Whether to skip TLS verification",
 				Optional:            true,
 			},
 		},
 	}
 }
 
-func (p *ScaffoldingProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	var data ScaffoldingProviderModel
+func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	var data CephProviderModel
 
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 
@@ -61,48 +70,59 @@ func (p *ScaffoldingProvider) Configure(ctx context.Context, req provider.Config
 		return
 	}
 
-	// Configuration values are now available.
-	// if data.Endpoint.IsNull() { /* ... */ }
+	// Default values from environment variables if not set in config
+	url := os.Getenv("CEPH_DASHBOARD_URL")
+	username := os.Getenv("CEPH_DASHBOARD_USERNAME")
+	password := os.Getenv("CEPH_DASHBOARD_PASSWORD")
+	insecure := false
 
-	// Example client configuration for data sources and resources
-	client := http.DefaultClient
-	resp.DataSourceData = client
-	resp.ResourceData = client
+	if !data.URL.IsNull() {
+		url = data.URL.ValueString()
+	}
+	if !data.Username.IsNull() {
+		username = data.Username.ValueString()
+	}
+	if !data.Password.IsNull() {
+		password = data.Password.ValueString()
+	}
+	if !data.Insecure.IsNull() {
+		insecure = data.Insecure.ValueBool()
+	}
+
+	if url == "" {
+		resp.Diagnostics.AddError("Missing URL", "The Ceph Dashboard URL must be configured.")
+		return
+	}
+
+	c, err := client.NewClient(url, username, password, insecure)
+	if err != nil {
+		resp.Diagnostics.AddError("Client Error", "Unable to create Ceph client: "+err.Error())
+		return
+	}
+
+	resp.DataSourceData = c
+	resp.ResourceData = c
 }
 
-func (p *ScaffoldingProvider) Resources(ctx context.Context) []func() resource.Resource {
+func (p *CephProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewExampleResource,
+		NewCephPoolResource,
+		NewCephUserResource,
 	}
 }
 
-func (p *ScaffoldingProvider) EphemeralResources(ctx context.Context) []func() ephemeral.EphemeralResource {
-	return []func() ephemeral.EphemeralResource{
-		NewExampleEphemeralResource,
-	}
-}
-
-func (p *ScaffoldingProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+func (p *CephProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
-		NewExampleDataSource,
-	}
-}
-
-func (p *ScaffoldingProvider) Functions(ctx context.Context) []func() function.Function {
-	return []func() function.Function{
-		NewExampleFunction,
-	}
-}
-
-func (p *ScaffoldingProvider) Actions(ctx context.Context) []func() action.Action {
-	return []func() action.Action{
-		NewExampleAction,
+		NewCephPoolDataSource,
+		NewCephUserDataSource,
+		NewCephClusterDataSource,
+		NewCephMonitorsDataSource,
 	}
 }
 
 func New(version string) func() provider.Provider {
 	return func() provider.Provider {
-		return &ScaffoldingProvider{
+		return &CephProvider{
 			version: version,
 		}
 	}

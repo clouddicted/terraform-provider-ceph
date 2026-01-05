@@ -15,7 +15,7 @@ import (
 // The factory function is called for each Terraform CLI command to create a provider
 // server that the CLI can connect to and interact with.
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
-	"scaffolding": providerserver.NewProtocol6WithError(New("test")()),
+	"ceph": providerserver.NewProtocol6WithError(New("test")()),
 }
 
 // testAccProtoV6ProviderFactoriesWithEcho includes the echo provider alongside the scaffolding provider.

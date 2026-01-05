@@ -1,0 +1,6 @@
+provider_installation {
+  dev_overrides {
+    "clouddicted/ceph" = "/home/wtrojano/thebeansweb/terraform-provider-ceph"
+  }
+  direct {}
+}
