@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"os"
 
 	"github.com/clouddicted/terraform-provider-ceph/internal/client"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -41,20 +40,20 @@ func (p *CephProvider) Schema(ctx context.Context, req provider.SchemaRequest, r
 		Attributes: map[string]schema.Attribute{
 			"url": schema.StringAttribute{
 				MarkdownDescription: "The Ceph Dashboard URL (e.g., https://ceph-dashboard.example.com:8443)",
-				Optional:            true,
+				Required:            true,
 			},
 			"username": schema.StringAttribute{
 				MarkdownDescription: "The username for authentication",
-				Optional:            true,
+				Required:            true,
 				Sensitive:           true,
 			},
 			"password": schema.StringAttribute{
 				MarkdownDescription: "The password for authentication",
-				Optional:            true,
+				Required:            true,
 				Sensitive:           true,
 			},
 			"insecure": schema.BoolAttribute{
-				MarkdownDescription: "Whether to skip TLS verification",
+				MarkdownDescription: "Whether to skip TLS verification. Default: false.",
 				Optional:            true,
 			},
 		},
@@ -70,28 +69,12 @@ func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
-	// Default values from environment variables if not set in config
-	url := os.Getenv("CEPH_DASHBOARD_URL")
-	username := os.Getenv("CEPH_DASHBOARD_USERNAME")
-	password := os.Getenv("CEPH_DASHBOARD_PASSWORD")
+	url := data.URL.ValueString()
+	username := data.Username.ValueString()
+	password := data.Password.ValueString()
 	insecure := false
-
-	if !data.URL.IsNull() {
-		url = data.URL.ValueString()
-	}
-	if !data.Username.IsNull() {
-		username = data.Username.ValueString()
-	}
-	if !data.Password.IsNull() {
-		password = data.Password.ValueString()
-	}
 	if !data.Insecure.IsNull() {
 		insecure = data.Insecure.ValueBool()
-	}
-
-	if url == "" {
-		resp.Diagnostics.AddError("Missing URL", "The Ceph Dashboard URL must be configured.")
-		return
 	}
 
 	c, err := client.NewClient(url, username, password, insecure)

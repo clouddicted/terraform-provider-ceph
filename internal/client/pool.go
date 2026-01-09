@@ -54,43 +54,61 @@ func (c *Client) GetPool(name string) (*Pool, error) {
 		return nil, err
 	}
 
-	// The GET response might have different field names than POST request.
-	// Usually "pool_name" instead of "pool".
-	// We need a separate struct or custom unmarshaling if they differ significantly.
-	// For now, let's assume we can map it.
-	// Based on typical Ceph API, GET returns "pool_name".
+	// GET response has different field names than POST request
 	type GetPoolResponse struct {
-		PoolName            string                 `json:"pool_name"`
-		Type                string                 `json:"type"` // "replicated" vs "pool_type"?
-		PgAutoscaleMode     string                 `json:"pg_autoscale_mode"`
-		PgNum               int                    `json:"pg_num"`
-		Size                int                    `json:"size"`
-		QuotaMaxBytes       int64                  `json:"quota_max_bytes"`
-		ApplicationMetadata map[string]interface{} `json:"application_metadata"` // It returns a map, not list?
-		// ... other fields
+		PoolID              int      `json:"pool"`
+		PoolName            string   `json:"pool_name"`
+		Type                string   `json:"type"`
+		PgAutoscaleMode     string   `json:"pg_autoscale_mode"`
+		PgNum               int      `json:"pg_num"`
+		Size                int      `json:"size"`
+		CrushRule           string   `json:"crush_rule"`
+		QuotaMaxBytes       int64    `json:"quota_max_bytes"`
+		ApplicationMetadata []string `json:"application_metadata"`
 	}
 
-	// Let's stick to the simple struct for now and adjust if testing fails.
-	// The user provided the POST payload.
-
-	var pool Pool
-	err = json.Unmarshal(resp, &pool)
+	var getResp GetPoolResponse
+	err = json.Unmarshal(resp, &getResp)
 	if err != nil {
 		return nil, err
 	}
 
-	// Map pool_name from response if needed, but our struct uses "pool" json tag.
-	// If the API returns "pool_name", it won't populate "PoolName" field which has `json:"pool"`.
-	// We should probably use a separate struct for GET or use multiple tags (not supported in stdlib).
-	// Let's fix the struct to handle both if possible, or just use a map for flexibility?
-	// No, let's use a specific struct for GET.
+	// Map response to Pool struct
+	pool := &Pool{
+		PoolName:            getResp.PoolName,
+		Type:                getResp.Type,
+		PgAutoscaleMode:     getResp.PgAutoscaleMode,
+		PgNum:               getResp.PgNum,
+		Size:                getResp.Size,
+		RuleName:            getResp.CrushRule,
+		QuotaMaxBytes:       getResp.QuotaMaxBytes,
+		ApplicationMetadata: getResp.ApplicationMetadata,
+	}
 
-	return &pool, nil
+	return pool, nil
+}
+
+// PoolUpdate represents the fields that can be updated on a pool
+type PoolUpdate struct {
+	PgAutoscaleMode     string   `json:"pg_autoscale_mode,omitempty"`
+	PgNum               int      `json:"pg_num,omitempty"`
+	Size                int      `json:"size,omitempty"`
+	QuotaMaxBytes       int64    `json:"quota_max_bytes,omitempty"`
+	ApplicationMetadata []string `json:"application_metadata,omitempty"`
 }
 
 // UpdatePool updates an existing pool
 func (c *Client) UpdatePool(name string, pool Pool) error {
-	rb, err := json.Marshal(pool)
+	// Only send fields that can be updated
+	update := PoolUpdate{
+		PgAutoscaleMode:     pool.PgAutoscaleMode,
+		PgNum:               pool.PgNum,
+		Size:                pool.Size,
+		QuotaMaxBytes:       pool.QuotaMaxBytes,
+		ApplicationMetadata: pool.ApplicationMetadata,
+	}
+
+	rb, err := json.Marshal(update)
 	if err != nil {
 		return err
 	}

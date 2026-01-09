@@ -5,9 +5,14 @@ import (
 	"fmt"
 
 	"github.com/clouddicted/terraform-provider-ceph/internal/client"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -22,7 +27,7 @@ type CephPoolResourceModel struct {
 	Name                types.String `tfsdk:"name"`
 	PgNum               types.Int64  `tfsdk:"pg_num"`
 	Type                types.String `tfsdk:"type"`
-	PgAutoscaleMode     types.String `tfsdk:"pg_autoscale_mode"`
+	PgAutoscaleMode     types.Bool   `tfsdk:"pg_autoscale_mode"`
 	Size                types.Int64  `tfsdk:"size"`
 	RuleName            types.String `tfsdk:"rule_name"`
 	QuotaMaxBytes       types.Int64  `tfsdk:"quota_max_bytes"`
@@ -43,39 +48,57 @@ func (r *CephPoolResource) Schema(ctx context.Context, req resource.SchemaReques
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
-				Required: true,
+				Required:    true,
+				Description: "The name of the pool.",
 			},
 			"pg_num": schema.Int64Attribute{
-				Optional: true,
-				Computed: true,
+				Optional:    true,
+				Computed:    true,
+				Default:     int64default.StaticInt64(16),
+				Description: "The number of placement groups. Default: 16.",
 			},
 			"type": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString("replicated"),
+				Description: "The pool type. Default: replicated.",
 			},
-			"pg_autoscale_mode": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
+			"pg_autoscale_mode": schema.BoolAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(true),
+				Description: "Enable PG autoscale mode. Default: true (on).",
 			},
 			"size": schema.Int64Attribute{
-				Optional: true,
-				Computed: true,
+				Optional:    true,
+				Computed:    true,
+				Default:     int64default.StaticInt64(3),
+				Description: "The replication size. Default: 3.",
 			},
 			"rule_name": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString("replicated_rule"),
+				Description: "The CRUSH rule name. Default: replicated_rule.",
 			},
 			"quota_max_bytes": schema.Int64Attribute{
-				Optional: true,
-				Computed: true,
+				Optional:    true,
+				Computed:    true,
+				Default:     int64default.StaticInt64(0),
+				Description: "Maximum bytes quota. Default: 0 (no limit).",
 			},
 			"application_metadata": schema.ListAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
+				Computed:    true,
+				Default:     listdefault.StaticValue(types.ListValueMust(types.StringType, []attr.Value{types.StringValue("rbd")})),
+				Description: "List of application metadata tags (rbd, cephfs, rgw). Default: [rbd].",
 			},
 			"rbd_mirroring": schema.BoolAttribute{
-				Optional: true,
-				Computed: true,
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+				Description: "Enable RBD mirroring. Default: false.",
 			},
 		},
 	}
@@ -113,11 +136,16 @@ func (r *CephPoolResource) Create(ctx context.Context, req resource.CreateReques
 		}
 	}
 
+	pgAutoscaleMode := "off"
+	if data.PgAutoscaleMode.ValueBool() {
+		pgAutoscaleMode = "on"
+	}
+
 	pool := client.Pool{
 		PoolName:            data.Name.ValueString(),
 		PgNum:               int(data.PgNum.ValueInt64()),
 		Type:                data.Type.ValueString(),
-		PgAutoscaleMode:     data.PgAutoscaleMode.ValueString(),
+		PgAutoscaleMode:     pgAutoscaleMode,
 		Size:                int(data.Size.ValueInt64()),
 		RuleName:            data.RuleName.ValueString(),
 		QuotaMaxBytes:       data.QuotaMaxBytes.ValueInt64(),
@@ -149,7 +177,7 @@ func (r *CephPoolResource) Read(ctx context.Context, req resource.ReadRequest, r
 
 	data.PgNum = types.Int64Value(int64(pool.PgNum))
 	data.Type = types.StringValue(pool.Type)
-	data.PgAutoscaleMode = types.StringValue(pool.PgAutoscaleMode)
+	data.PgAutoscaleMode = types.BoolValue(pool.PgAutoscaleMode == "on")
 	data.Size = types.Int64Value(int64(pool.Size))
 	data.QuotaMaxBytes = types.Int64Value(pool.QuotaMaxBytes)
 
@@ -179,11 +207,16 @@ func (r *CephPoolResource) Update(ctx context.Context, req resource.UpdateReques
 		}
 	}
 
+	pgAutoscaleMode := "off"
+	if data.PgAutoscaleMode.ValueBool() {
+		pgAutoscaleMode = "on"
+	}
+
 	pool := client.Pool{
 		PoolName:            data.Name.ValueString(),
 		PgNum:               int(data.PgNum.ValueInt64()),
 		Type:                data.Type.ValueString(),
-		PgAutoscaleMode:     data.PgAutoscaleMode.ValueString(),
+		PgAutoscaleMode:     pgAutoscaleMode,
 		Size:                int(data.Size.ValueInt64()),
 		RuleName:            data.RuleName.ValueString(),
 		QuotaMaxBytes:       data.QuotaMaxBytes.ValueInt64(),
