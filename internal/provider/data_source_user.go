@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/clouddicted/terraform-provider-ceph/internal/client"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -18,9 +19,9 @@ type CephUserDataSource struct {
 }
 
 type CephUserDataSourceModel struct {
-	Name         types.String `tfsdk:"name"`
-	Capabilities types.String `tfsdk:"capabilities"`
-	Key          types.String `tfsdk:"key"`
+	Name  types.String `tfsdk:"name"`
+	Pools types.List   `tfsdk:"pools"`
+	Key   types.String `tfsdk:"key"`
 }
 
 func NewCephUserDataSource() datasource.DataSource {
@@ -38,8 +39,9 @@ func (d *CephUserDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 				MarkdownDescription: "The user entity name (e.g., client.app)",
 				Required:            true,
 			},
-			"capabilities": schema.StringAttribute{
-				MarkdownDescription: "The capabilities string",
+			"pools": schema.ListAttribute{
+				MarkdownDescription: "List of pool names the user can access",
+				ElementType:         types.StringType,
 				Computed:            true,
 			},
 			"key": schema.StringAttribute{
@@ -75,22 +77,28 @@ func (d *CephUserDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	_, err := d.client.GetUser(data.Name.ValueString())
+	user, err := d.client.GetUser(data.Name.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read user, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read user: %s", err))
 		return
 	}
 
-	// Fetch the key
+	// Extract pools from capabilities (caps is now a map[string]string)
+	var pools []string
+	for service, cap := range user.Caps {
+		if service == "osd" && strings.HasPrefix(cap, "profile rbd pool=") {
+			pool := strings.TrimPrefix(cap, "profile rbd pool=")
+			pools = append(pools, pool)
+		}
+	}
+	data.Pools, _ = types.ListValueFrom(ctx, types.StringType, pools)
+
 	key, err := d.client.ExportUser(data.Name.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to export user key, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to export user key: %s", err))
 		return
 	}
 	data.Key = types.StringValue(key)
-
-	// Note: Capabilities mapping is skipped for now as GetUser might return different format.
-	// We assume the user exists and we got the key.
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

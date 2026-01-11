@@ -45,7 +45,6 @@ func (p *CephProvider) Schema(ctx context.Context, req provider.SchemaRequest, r
 			"username": schema.StringAttribute{
 				MarkdownDescription: "The username for authentication",
 				Required:            true,
-				Sensitive:           true,
 			},
 			"password": schema.StringAttribute{
 				MarkdownDescription: "The password for authentication",
@@ -69,15 +68,12 @@ func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
-	url := data.URL.ValueString()
-	username := data.Username.ValueString()
-	password := data.Password.ValueString()
 	insecure := false
 	if !data.Insecure.IsNull() {
 		insecure = data.Insecure.ValueBool()
 	}
 
-	c, err := client.NewClient(url, username, password, insecure)
+	c, err := client.NewClient(data.URL.ValueString(), data.Username.ValueString(), data.Password.ValueString(), insecure)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", "Unable to create Ceph client: "+err.Error())
 		return

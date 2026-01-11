@@ -6,12 +6,29 @@ terraform {
   }
 }
 
+variable "ceph_url" {
+  type = string
+}
+
+variable "ceph_username" {
+  type = string
+}
+
+variable "ceph_password" {
+  type      = string
+  sensitive = true
+}
+
+variable "ceph_insecure" {
+  type    = bool
+  default = false
+}
+
 provider "ceph" {
-  # Credentials will be loaded from environment variables:
-  # CEPH_DASHBOARD_URL
-  # CEPH_DASHBOARD_USERNAME
-  # CEPH_DASHBOARD_PASSWORD
-  # CEPH_DASHBOARD_INSECURE
+  url      = var.ceph_url
+  username = var.ceph_username
+  password = var.ceph_password
+  insecure = var.ceph_insecure
 }
 
 resource "ceph_pool" "test" {
@@ -21,8 +38,8 @@ resource "ceph_pool" "test" {
 }
 
 resource "ceph_user" "test_user" {
-  name         = "client.terraform_test_user"
-  capabilities = "mon 'allow r' osd 'allow *'"
+  name  = "client.terraform_test_user"
+  pools = [ceph_pool.test.name]
 }
 
 output "user_key" {

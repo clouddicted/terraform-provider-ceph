@@ -30,7 +30,9 @@ EOF
 
 echo "Loading environment variables from .env..."
 if [ -f "$TEST_DIR/.env" ]; then
-  export $(cat "$TEST_DIR/.env" | xargs)
+  set -a
+  source "$TEST_DIR/.env"
+  set +a
 else
   echo "Error: .env file not found in $TEST_DIR. Please copy .env.example to .env and configure it."
   exit 1
