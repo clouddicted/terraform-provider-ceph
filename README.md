@@ -75,8 +75,9 @@ provider "ceph" {
 
 | Resource | Description |
 |----------|-------------|
-| `ceph_pool` | Create/update/delete pools (replicated). Supports pg_num, size, quotas, application_metadata.|
+| `ceph_pool` | Create/update/delete pools (replicated). Supports pg_num, size, quotas, application_metadata, rule_name. |
 | `ceph_user` | Create/update/delete users with RBD access to specified pools. Exports the user key. |
+| `ceph_crush_rule` | Create/delete CRUSH rules for custom data placement (failure domain, device class). |
 
 ### Data Sources
 
@@ -86,6 +87,7 @@ provider "ceph" {
 | `ceph_monitors` | Read monitor addresses (name, addr, rank) |
 | `ceph_pool` | Read pool configuration |
 | `ceph_user` | Read user pools and key |
+| `ceph_crush_rule` | Read existing CRUSH rule by name |
 
 ## Not (and probably never) Implemented
 

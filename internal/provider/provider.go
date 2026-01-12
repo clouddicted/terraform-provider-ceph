@@ -87,6 +87,7 @@ func (p *CephProvider) Resources(ctx context.Context) []func() resource.Resource
 	return []func() resource.Resource{
 		NewCephPoolResource,
 		NewCephUserResource,
+		NewCephCrushRuleResource,
 	}
 }
 
@@ -96,6 +97,7 @@ func (p *CephProvider) DataSources(ctx context.Context) []func() datasource.Data
 		NewCephUserDataSource,
 		NewCephClusterDataSource,
 		NewCephMonitorsDataSource,
+		NewCephCrushRuleDataSource,
 	}
 }
 
